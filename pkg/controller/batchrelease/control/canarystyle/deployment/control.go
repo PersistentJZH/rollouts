@@ -27,6 +27,7 @@ import (
 	"github.com/openkruise/rollouts/pkg/util"
 	utilclient "github.com/openkruise/rollouts/pkg/util/client"
 	apps "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -83,11 +84,22 @@ func (rc *realController) BuildCanaryController(release *v1beta1.BatchRelease) (
 }
 
 func (rc *realController) CalculateBatchContext(release *v1beta1.BatchRelease) *batchcontext.BatchContext {
+	rolloutID := release.Spec.ReleasePlan.RolloutID
+	if rolloutID != "" {
+		// if rollout-id is set, the pod will be patched batch label,
+		// so we have to list pod here.
+		if _, err := rc.ListOwnedPods(); err != nil {
+			return nil
+		}
+	}
 	replicas := *rc.stableObject.Spec.Replicas
 	currentBatch := release.Status.CanaryStatus.CurrentBatch
 	desiredUpdate := int32(control.CalculateBatchReplicas(release, int(replicas), int(currentBatch)))
 
 	return &batchcontext.BatchContext{
+		Pods:                   rc.canaryPods,
+		RolloutID:              rolloutID,
+		UpdateRevision:         release.Status.UpdateRevision,
 		Replicas:               replicas,
 		CurrentBatch:           currentBatch,
 		DesiredUpdatedReplicas: desiredUpdate,
@@ -103,4 +115,13 @@ func (rc *realController) getLatestTemplate() (*v1.PodTemplateSpec, error) {
 		return nil, err
 	}
 	return &rc.stableObject.Spec.Template, nil
+}
+
+func (rc *realController) ListOwnedPods() ([]*corev1.Pod, error) {
+	if rc.canaryPods != nil {
+		return rc.canaryPods, nil
+	}
+	var err error
+	rc.canaryPods, err = util.ListOwnedPods(rc.canaryClient, rc.canaryObject)
+	return rc.canaryPods, err
 }

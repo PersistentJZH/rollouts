@@ -43,6 +43,7 @@ type realCanaryController struct {
 	canaryObject *apps.Deployment
 	canaryClient client.Client
 	objectKey    types.NamespacedName
+	canaryPods   []*corev1.Pod
 }
 
 func newCanary(cli client.Client, key types.NamespacedName) realCanaryController {
@@ -145,6 +146,7 @@ func (r *realCanaryController) create(release *v1beta1.BatchRelease, template *a
 			canary.Spec.Template.Annotations[k] = v
 		}
 	}
+	canary.Spec.Template.Labels[apps.ControllerRevisionHashLabelKey] = release.Status.UpdateRevision
 	canary.Spec.Replicas = pointer.Int32(0)
 	canary.Spec.Paused = false
 

@@ -107,7 +107,12 @@ func (rc *realCanaryController) UpgradeBatch() error {
 	klog.Infof("BatchRelease %v calculated context when upgrade batch: %s",
 		klog.KObj(rc.release), batchContext.Log())
 
-	return canary.UpgradeBatch(batchContext)
+	err = canary.UpgradeBatch(batchContext)
+	if err != nil {
+		return err
+	}
+
+	return rc.patcher.PatchPodBatchLabel(batchContext)
 }
 
 func (rc *realCanaryController) CheckBatchReady() error {
